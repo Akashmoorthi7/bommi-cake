@@ -1,5 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Lock, Eye, EyeOff, Sparkles, ArrowRight, ShieldCheck, AlertCircle, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
+import {
+  X,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  AlertCircle,
+  CheckCircle2,
+  UserPlus,
+  LogIn,
+  Terminal,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert,
+  Radio,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { playPopSound, playPowSound } from '../utils/sound';
 
@@ -11,10 +29,17 @@ export const AuthModal = () => {
     loginWithCredentials,
     registerUser,
     registeredUsers,
+    lastTransmission,
   } = useAuth();
 
   // Mode: 'login' | 'register'
   const [mode, setMode] = useState(initialModalMode || 'login');
+
+  // Web Security Learning controls
+  const [httpMethod, setHttpMethod] = useState('POST'); // 'POST' (Secure in body) | 'GET' (Exposed in URL)
+  const [httpFormat, setHttpFormat] = useState('json'); // 'json' | 'urlencoded'
+  const [showSecurityLab, setShowSecurityLab] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
@@ -56,8 +81,8 @@ export const AuthModal = () => {
     (u) => u.username.toLowerCase() === regUsername.trim().toLowerCase()
   );
 
-  // Handle Login submission
-  const handleLoginSubmit = (e) => {
+  // Handle Login submission via HTTP POST (or GET for educational comparison)
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -70,15 +95,29 @@ export const AuthModal = () => {
       return;
     }
 
+    setIsSubmitting(true);
     playPowSound();
-    const result = loginWithCredentials(loginUsername, loginPassword);
 
-    if (!result.success) {
-      setLoginError({
-        type: result.error,
-        message: result.message,
-        suggestedUsername: loginUsername.trim(),
+    try {
+      const result = await loginWithCredentials(loginUsername, loginPassword, {
+        method: httpMethod,
+        contentType: httpFormat === 'json' ? 'application/json' : 'application/x-www-form-urlencoded',
       });
+
+      if (!result.success) {
+        setLoginError({
+          type: result.error,
+          message: result.message,
+          suggestedUsername: loginUsername.trim(),
+        });
+      }
+    } catch (err) {
+      setLoginError({
+        type: 'NETWORK_ERROR',
+        message: 'Network request error during login.',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -93,8 +132,8 @@ export const AuthModal = () => {
     }
   };
 
-  // Handle Register submission
-  const handleRegisterSubmit = (e) => {
+  // Handle Register submission via HTTP POST
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setRegError('');
 
@@ -118,16 +157,24 @@ export const AuthModal = () => {
       return;
     }
 
+    setIsSubmitting(true);
     playPowSound();
-    const result = registerUser({
-      username: regUsername.trim(),
-      password: regPassword,
-      name: regDisplayName.trim() || regUsername.trim(),
-      avatar: selectedAvatar,
-    });
 
-    if (!result.success) {
-      setRegError(result.message);
+    try {
+      const result = await registerUser({
+        username: regUsername.trim(),
+        password: regPassword,
+        name: regDisplayName.trim() || regUsername.trim(),
+        avatar: selectedAvatar,
+      });
+
+      if (!result.success) {
+        setRegError(result.message);
+      }
+    } catch (err) {
+      setRegError('Network error during registration.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,8 +255,150 @@ export const AuthModal = () => {
 
           {/* ======================= LOGIN VIEW ======================= */}
           {mode === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              
+            <form
+              method={httpMethod}
+              action="/api/login"
+              onSubmit={handleLoginSubmit}
+              className="space-y-4"
+            >
+              {/* Web Security & Wireshark Lab Controls */}
+              <div className="bg-slate-900 text-white rounded-2xl p-3 border-2 border-black shadow-comic-sm space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-comic-yellow font-comic tracking-wide">
+                    <Terminal className="w-4 h-4 text-emerald-400" />
+                    <span>WEB SECURITY &amp; WIRESHARK LAB</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSecurityLab(!showSecurityLab)}
+                    className="text-[11px] text-gray-300 hover:text-white flex items-center gap-1 underline font-comic cursor-pointer"
+                  >
+                    <span>{showSecurityLab ? 'Close Help' : 'Wireshark Guide'}</span>
+                    {showSecurityLab ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {/* HTTP Method Switcher: POST vs GET */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => { playPopSound(); setHttpMethod('POST'); }}
+                    className={`py-1.5 px-2 rounded-xl font-comic font-bold border-2 border-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      httpMethod === 'POST'
+                        ? 'bg-emerald-400 text-black shadow-comic-xs scale-[1.02]'
+                        : 'bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4 text-black" />
+                    <span>POST (In Body)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { playPopSound(); setHttpMethod('GET'); }}
+                    className={`py-1.5 px-2 rounded-xl font-comic font-bold border-2 border-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      httpMethod === 'GET'
+                        ? 'bg-amber-400 text-black shadow-comic-xs scale-[1.02]'
+                        : 'bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700'
+                    }`}
+                  >
+                    <ShieldAlert className="w-4 h-4 text-black" />
+                    <span>GET (In URL Query)</span>
+                  </button>
+                </div>
+
+                {/* Educational Security Explanation */}
+                {httpMethod === 'POST' ? (
+                  <div className="text-[11px] text-emerald-300 bg-emerald-950/70 p-2 rounded-xl border border-emerald-700/60 leading-relaxed space-y-1">
+                    <div className="font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                      <span>POST Method Active (Best Practice)</span>
+                    </div>
+                    <div>
+                      Credentials are packaged inside the <strong>HTTP Request Body</strong>. The URL remains clean (<code>/api/login</code>) and credentials are NOT exposed in address bars, browser history, or server access logs.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-amber-200 bg-amber-950/70 p-2 rounded-xl border border-amber-700/60 leading-relaxed space-y-1">
+                    <div className="font-bold flex items-center gap-1 text-amber-400">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block animate-pulse"></span>
+                      <span>GET Method Active (Educational Insecure Demo)</span>
+                    </div>
+                    <div>
+                      Credentials will be appended to the <strong>URL Query String</strong> (<code>/api/login?username=...&amp;password=...</code>). This exposes sensitive passwords to shoulder surfers, proxy caches, and web logs!
+                    </div>
+                  </div>
+                )}
+
+                {/* POST Payload format selector */}
+                {httpMethod === 'POST' && (
+                  <div className="flex items-center justify-between text-[11px] px-1 text-gray-300 pt-0.5">
+                    <span className="font-bold text-gray-400">Body Payload Format:</span>
+                    <div className="flex gap-2">
+                      <label className="flex items-center gap-1 cursor-pointer hover:text-white">
+                        <input
+                          type="radio"
+                          name="httpFormat"
+                          value="json"
+                          checked={httpFormat === 'json'}
+                          onChange={() => setHttpFormat('json')}
+                          className="accent-emerald-400"
+                        />
+                        <span>JSON</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer hover:text-white">
+                        <input
+                          type="radio"
+                          name="httpFormat"
+                          value="urlencoded"
+                          checked={httpFormat === 'urlencoded'}
+                          onChange={() => setHttpFormat('urlencoded')}
+                          className="accent-emerald-400"
+                        />
+                        <span>x-www-form-urlencoded</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Collapsible Wireshark Guide */}
+                {showSecurityLab && (
+                  <div className="p-2.5 bg-black/60 rounded-xl border border-slate-700 space-y-2 text-[11px] font-mono text-gray-200 animate-fadeIn">
+                    <div className="text-comic-yellow font-comic text-xs tracking-wider flex items-center gap-1 font-bold">
+                      <span>🦈 HOW TO INSPECT IN WIRESHARK:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 text-gray-300 leading-relaxed">
+                      <li>Launch Wireshark and choose interface: <strong className="text-cyan-300">lo</strong> (Loopback) or <strong className="text-cyan-300">wlp0s20f3</strong>.</li>
+                      <li>Apply display filter: <code className="bg-slate-800 text-emerald-300 px-1 rounded">http.request.method == "{httpMethod}"</code> or <code className="bg-slate-800 text-emerald-300 px-1 rounded">tcp.port == 5173</code>.</li>
+                      <li>Click <strong>LOGIN</strong> below, find the packet in Wireshark, right-click and select <strong>Follow &gt; HTTP Stream</strong>.</li>
+                      <li>Inspect the Request Header vs Body: in POST, the password is transmitted in the body payload below the headers!</li>
+                    </ol>
+                  </div>
+                )}
+
+                {/* Live Transmission Inspector */}
+                {lastTransmission && (
+                  <div className="bg-black/80 p-2.5 rounded-xl border border-slate-700 text-[10px] font-mono space-y-1">
+                    <div className="flex items-center justify-between text-cyan-400 font-bold font-comic uppercase tracking-wider">
+                      <span>📡 Captured HTTP Packet ({lastTransmission.timestamp})</span>
+                      <span className={lastTransmission.status === 200 ? 'text-emerald-400' : 'text-rose-400'}>
+                        {lastTransmission.status === 200 ? 'HTTP 200 OK' : `HTTP ${lastTransmission.status || 401}`}
+                      </span>
+                    </div>
+                    <div className="text-gray-300 truncate">
+                      <span className="text-comic-yellow font-bold">Request Line:</span> {lastTransmission.method} {lastTransmission.url}
+                    </div>
+                    <div className="text-gray-300">
+                      <span className="text-comic-yellow font-bold">Content-Type:</span> {lastTransmission.contentType}
+                    </div>
+                    <div className="text-emerald-300 break-all bg-slate-900 p-1.5 rounded border border-slate-800">
+                      <span className="text-comic-yellow font-bold">Request Body Payload:</span><br />
+                      {lastTransmission.body}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Username Field */}
               <div>
                 <label className="block text-xs font-comic text-gray-700 uppercase tracking-wider mb-1">
@@ -218,6 +407,8 @@ export const AuthModal = () => {
                 <div className="relative">
                   <input
                     type="text"
+                    name="username"
+                    id="login-username"
                     required
                     value={loginUsername}
                     onChange={(e) => {
@@ -239,6 +430,8 @@ export const AuthModal = () => {
                 <div className="relative">
                   <input
                     type={showLoginPassword ? 'text' : 'password'}
+                    name="password"
+                    id="login-password"
                     required
                     value={loginPassword}
                     onChange={(e) => {
@@ -252,7 +445,7 @@ export const AuthModal = () => {
                   <button
                     type="button"
                     onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className="absolute right-3 top-3 text-gray-500 hover:text-black"
+                    className="absolute right-3 top-3 text-gray-500 hover:text-black cursor-pointer"
                   >
                     {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -286,10 +479,11 @@ export const AuthModal = () => {
               {/* Login Button */}
               <button
                 type="submit"
-                className="w-full comic-btn bg-comic-red hover:bg-comic-redDark text-white py-3 rounded-xl text-base shadow-comic flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full comic-btn bg-comic-red hover:bg-comic-redDark disabled:opacity-60 text-white py-3 rounded-xl text-base shadow-comic flex items-center justify-center gap-2 cursor-pointer font-comic tracking-wide"
               >
                 <Sparkles className="w-4 h-4 text-comic-yellow" />
-                <span>LOGIN</span>
+                <span>{isSubmitting ? `SENDING ${httpMethod} REQUEST...` : `LOGIN VIA HTTP ${httpMethod}`}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "usr-1",
+    "username": "Techwithakash",
+    "password": "123456789",
+    "name": "akash",
+    "email": "akash@bommicake.com",
+    "phone": "86*********",
+    "avatar": "🦸‍♀️",
+    "addresses": [
+      {
+        "id": "addr-1",
+        "tag": "HOME HQ",
+        "receiver": "Techwithakash",
+        "phone": "86*********",
+        "addressLine": "Flat 402, Krypton Heights, Indiranagar",
+        "city": "Bengaluru",
+        "pincode": "560038",
+        "landmark": "Near Comic Con Central",
+        "isDefault": true
+      },
+      {
+        "id": "addr-2",
+        "tag": "PARTY ARENA",
+        "receiver": "Techwithakash",
+        "phone": "86*********",
+        "addressLine": "Wonderland Banquet Hall, 100ft Road",
+        "city": "Bengaluru",
+        "pincode": "560008",
+        "landmark": "Opposite Metro Station",
+        "isDefault": false
+      }
+    ]
+  },
+  {
+    "id": "usr-2",
+    "username": "alex_baker",
+    "password": "ComicCake@2026",
+    "name": "Alex Wonder",
+    "email": "alex@bommicake.com",
+    "phone": "9123456789",
+    "avatar": "🦸‍♂️",
+    "addresses": [
+      {
+        "id": "addr-alex-1",
+        "tag": "STUDIO HQ",
+        "receiver": "Alex Wonder",
+        "phone": "9123456789",
+        "addressLine": "Studio 12, Marvel Art Lane, Bandra West",
+        "city": "Mumbai",
+        "pincode": "400050",
+        "landmark": "Opposite Comic Hub",
+        "isDefault": true
+      }
+    ]
+  },
+  {
+    "id": "usr-1790767355342",
+    "username": "batman",
+    "password": "BatPassword99",
+    "name": "Bruce Wayne",
+    "email": "batman@bommicake.com",
+    "phone": "9876543210",
+    "avatar": "🦸‍♂️",
+    "addresses": []
+  }
+]

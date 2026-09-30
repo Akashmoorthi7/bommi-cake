@@ -108,57 +108,168 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {}
   }, [user]);
 
+  // Last network transmission metadata for Wireshark inspection
+  const [lastTransmission, setLastTransmission] = useState(null);
+
   /**
-   * Log in an existing user with username & password
+   * Log in an existing user with username & password via HTTP POST
+   * (Transmits credentials in request body rather than URL query string)
    */
-  const loginWithCredentials = (username, password) => {
-    const cleanUsername = username.trim().toLowerCase();
+  const loginWithCredentials = async (username, password, options = {}) => {
+    const { method = 'POST', contentType = 'application/json' } = options;
+    const cleanUsername = username.trim();
     const cleanPassword = password.trim();
 
-    // Check if username exists
-    const foundUser = registeredUsers.find(
-      (u) => u.username.toLowerCase() === cleanUsername
-    );
-
-    if (!foundUser) {
-      return {
-        success: false,
-        error: 'USER_NOT_FOUND',
-        message: `No registered account found for "${username}". Would you like to create a new account?`,
-      };
-    }
-
-    // Check password
-    if (foundUser.password !== cleanPassword) {
-      return {
-        success: false,
-        error: 'INVALID_PASSWORD',
-        message: 'Incorrect password! Please check your credentials and try again.',
-      };
-    }
-
-    // Login successful
-    playSuccessFanfare();
-    setUser(foundUser);
-    setIsLoginModalOpen(false);
-
-    if (postLoginAction) {
-      postLoginAction(foundUser);
-      setPostLoginAction(null);
-    }
-
-    return {
-      success: true,
-      user: foundUser,
+    const transmission = {
+      method,
+      endpoint: '/api/login',
+      contentType: method === 'POST' ? contentType : 'N/A (Query String in URL)',
+      url: '',
+      body: '',
+      credentialsInBody: method === 'POST',
+      exposedInUrl: method === 'GET',
+      status: null,
+      timestamp: new Date().toLocaleTimeString(),
     };
+
+    try {
+      let response;
+      if (method === 'POST') {
+        let payload;
+        const headers = {};
+
+        if (contentType === 'application/x-www-form-urlencoded') {
+          const params = new URLSearchParams();
+          params.append('username', cleanUsername);
+          params.append('password', cleanPassword);
+          payload = params.toString();
+          headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        } else {
+          payload = JSON.stringify({
+            username: cleanUsername,
+            password: cleanPassword,
+          });
+          headers['Content-Type'] = 'application/json';
+        }
+
+        transmission.url = `${window.location.origin}/api/login`;
+        transmission.body = payload;
+
+        response = await fetch('/api/login', {
+          method: 'POST',
+          headers,
+          body: payload,
+        });
+      } else {
+        // Educational GET comparison: credentials appended to URL
+        const queryUrl = `/api/login?username=${encodeURIComponent(cleanUsername)}&password=${encodeURIComponent(cleanPassword)}`;
+        transmission.url = `${window.location.origin}${queryUrl}`;
+        transmission.body = '(None - GET request parameters are attached to the URL query string)';
+
+        response = await fetch(queryUrl, {
+          method: 'GET',
+        });
+      }
+
+      transmission.status = response.status;
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        data = { error: 'NON_JSON_RESPONSE', message: 'Endpoint returned non-JSON response' };
+      }
+      transmission.response = data;
+      setLastTransmission(transmission);
+
+      if (!response.ok || !data.success) {
+        // If endpoint returned 404 (e.g. on a static CDN or un-deployed serverless route),
+        // fallback to local stored users so login still works seamlessly!
+        if (response.status === 404) {
+          const localMatch = registeredUsers.find(
+            (u) => u.username.toLowerCase() === cleanUsername.toLowerCase()
+          );
+          if (localMatch && localMatch.password === cleanPassword) {
+            playSuccessFanfare();
+            setUser(localMatch);
+            setIsLoginModalOpen(false);
+            if (postLoginAction) {
+              postLoginAction(localMatch);
+              setPostLoginAction(null);
+            }
+            return { success: true, user: localMatch, transmission };
+          }
+        }
+
+        return {
+          success: false,
+          error: data.error || 'INVALID_CREDENTIALS',
+          message: data.message || 'Login failed. Please check your credentials.',
+          transmission,
+        };
+      }
+
+      // Successful login
+      playSuccessFanfare();
+      setUser(data.user);
+      setIsLoginModalOpen(false);
+
+      if (postLoginAction) {
+        postLoginAction(data.user);
+        setPostLoginAction(null);
+      }
+
+      return {
+        success: true,
+        user: data.user,
+        transmission,
+      };
+    } catch (networkErr) {
+      console.warn('Network request failed, using local fallback:', networkErr);
+      const foundUser = registeredUsers.find(
+        (u) => u.username.toLowerCase() === cleanUsername.toLowerCase()
+      );
+
+      if (!foundUser) {
+        return {
+          success: false,
+          error: 'USER_NOT_FOUND',
+          message: `No registered account found for "${username}". Would you like to create a new account?`,
+          transmission,
+        };
+      }
+
+      if (foundUser.password !== cleanPassword) {
+        return {
+          success: false,
+          error: 'INVALID_PASSWORD',
+          message: 'Incorrect password! Please check your credentials and try again.',
+          transmission,
+        };
+      }
+
+      playSuccessFanfare();
+      setUser(foundUser);
+      setIsLoginModalOpen(false);
+
+      if (postLoginAction) {
+        postLoginAction(foundUser);
+        setPostLoginAction(null);
+      }
+
+      return {
+        success: true,
+        user: foundUser,
+        transmission,
+      };
+    }
   };
 
   /**
-   * Register a new user with validation:
+   * Register a new user via HTTP POST:
    * 1. Unique username
    * 2. Security password rules: min 6 chars, at least 1 letter, at least 1 number
    */
-  const registerUser = ({ username, password, name, phone, email, avatar }) => {
+  const registerUser = async ({ username, password, name, phone, email, avatar }) => {
     const cleanUsername = username.trim();
     const cleanPassword = password.trim();
 
@@ -171,7 +282,7 @@ export const AuthProvider = ({ children }) => {
       };
     }
 
-    // Validation 2: Username uniqueness
+    // Validation 2: Username uniqueness in local list
     const isTaken = registeredUsers.some(
       (u) => u.username.toLowerCase() === cleanUsername.toLowerCase()
     );
@@ -184,7 +295,6 @@ export const AuthProvider = ({ children }) => {
     }
 
     // Validation 3: Password security rules
-    // Rule: At least 6 characters, contains at least one letter and at least one number
     if (cleanPassword.length < 6) {
       return {
         success: false,
@@ -204,53 +314,76 @@ export const AuthProvider = ({ children }) => {
       };
     }
 
-    // Create new account
-    const newUser = {
-      id: 'usr-' + Date.now(),
+    const newUserPayload = {
       username: cleanUsername,
       password: cleanPassword,
       name: name?.trim() || cleanUsername,
       email: email?.trim() || `${cleanUsername.toLowerCase()}@bommicake.com`,
       phone: phone?.trim() || '9876543210',
       avatar: avatar || '🦸‍♂️',
-      addresses: [
-        {
-          id: 'addr-' + Date.now(),
-          tag: 'HOME HQ',
-          receiver: name?.trim() || cleanUsername,
-          phone: phone?.trim() || '9876543210',
-          addressLine: '100 ft Road, Indiranagar',
-          city: 'Bengaluru',
-          pincode: '560038',
-          landmark: 'Near Cake Central',
-          isDefault: true,
-        }
-      ],
     };
 
-    // Save to registered list
-    setRegisteredUsers((prev) => [...prev, newUser]);
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUserPayload),
+      });
 
-    // Automatically log the new user in
-    setUser(newUser);
-    setIsLoginModalOpen(false);
-    playSuccessFanfare();
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        return {
+          success: false,
+          error: data.error || 'REGISTER_FAILED',
+          message: data.message || 'Registration failed.',
+        };
+      }
 
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
+      const createdUser = data.user;
+      setRegisteredUsers((prev) => [...prev, createdUser]);
+      setUser(createdUser);
+      setIsLoginModalOpen(false);
+      playSuccessFanfare();
 
-    if (postLoginAction) {
-      postLoginAction(newUser);
-      setPostLoginAction(null);
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+
+      if (postLoginAction) {
+        postLoginAction(createdUser);
+        setPostLoginAction(null);
+      }
+
+      return {
+        success: true,
+        user: createdUser,
+      };
+    } catch (err) {
+      console.warn('Network registration failed, falling back to local storage:', err);
+      const fallbackUser = {
+        id: 'usr-' + Date.now(),
+        ...newUserPayload,
+        addresses: [],
+      };
+
+      setRegisteredUsers((prev) => [...prev, fallbackUser]);
+      setUser(fallbackUser);
+      setIsLoginModalOpen(false);
+      playSuccessFanfare();
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+
+      return {
+        success: true,
+        user: fallbackUser,
+      };
     }
-
-    return {
-      success: true,
-      user: newUser,
-    };
   };
 
   const logout = () => {
@@ -302,6 +435,7 @@ export const AuthProvider = ({ children }) => {
         initialModalMode,
         openLogin,
         closeLogin,
+        lastTransmission,
       }}
     >
       {children}
